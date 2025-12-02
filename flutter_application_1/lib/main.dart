@@ -11,11 +11,11 @@ class ChessApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Simple Chess Game',
       debugShowCheckedModeBanner: false,
-      title: 'Simple Chess',
       home: Scaffold(
         appBar: AppBar(title: const Text('Simple Chess Game')),
-        body: Center(child: ChessBoard()),
+        body: const SafeArea(child: Center(child: ChessBoard())),
       ),
     );
   }
