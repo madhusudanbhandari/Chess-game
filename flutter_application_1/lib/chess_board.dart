@@ -9,6 +9,8 @@ class ChessBoard extends StatefulWidget {
 }
 
 class _ChessBoardState extends State<ChessBoard> {
+  String currentTurn = 'white'; // Track whose turn it is
+
   // 8x8 board, each entry is null or like 'wp' (white pawn), 'bk' (black king).
   late List<List<String?>> board;
 
@@ -16,7 +18,7 @@ class _ChessBoardState extends State<ChessBoard> {
   int? selectedCol;
   List<List<int>> legalMoves = []; // list of [row, col] for highlighted moves
 
-  // Undo history stack: each item holds move info
+  // Undo history stack
   final List<Map<String, dynamic>> moveHistory = [];
 
   @override
@@ -28,7 +30,6 @@ class _ChessBoardState extends State<ChessBoard> {
   void _initializeBoard() {
     board = List.generate(8, (_) => List.filled(8, null));
 
-    // Black major pieces (row 0)
     board[0][0] = 'br';
     board[0][1] = 'bn';
     board[0][2] = 'bb';
@@ -38,13 +39,9 @@ class _ChessBoardState extends State<ChessBoard> {
     board[0][6] = 'bn';
     board[0][7] = 'br';
 
-    // Black pawns (row 1)
     for (int c = 0; c < 8; c++) board[1][c] = 'bp';
-
-    // White pawns (row 6)
     for (int c = 0; c < 8; c++) board[6][c] = 'wp';
 
-    // White major pieces (row 7)
     board[7][0] = 'wr';
     board[7][1] = 'wn';
     board[7][2] = 'wb';
@@ -58,9 +55,9 @@ class _ChessBoardState extends State<ChessBoard> {
     selectedCol = null;
     legalMoves = [];
     moveHistory.clear();
+    currentTurn = 'white'; // Reset turn to white
   }
 
-  // Basic legal-move checker (no castling, no en-passant, no check detection, no promotion UI)
   bool _isLegalMove(
     String piece,
     int fromRow,
@@ -82,9 +79,7 @@ class _ChessBoardState extends State<ChessBoard> {
     switch (type) {
       case 'p': // Pawn
         int dir = color == 'w' ? -1 : 1;
-        // Single forward
         if (dc == 0 && dr == dir && board[toRow][toCol] == null) return true;
-        // Double forward from starting rank
         if (dc == 0 &&
             dr == 2 * dir &&
             board[toRow][toCol] == null &&
@@ -93,7 +88,6 @@ class _ChessBoardState extends State<ChessBoard> {
                 (color == 'b' && fromRow == 1))) {
           return true;
         }
-        // Capture diagonally
         if (dr == dir && (dc == 1 || dc == -1) && board[toRow][toCol] != null)
           return true;
         return false;
@@ -145,14 +139,13 @@ class _ChessBoardState extends State<ChessBoard> {
         }
         return false;
 
-      case 'k': // King (one square any direction)
+      case 'k': // King
         if (dr.abs() <= 1 && dc.abs() <= 1) return true;
         return false;
     }
     return false;
   }
 
-  // Return all legal moves for a piece at (row,col)
   List<List<int>> _getLegalMoves(String piece, int row, int col) {
     final List<List<int>> moves = [];
     for (int r = 0; r < 8; r++) {
@@ -163,11 +156,22 @@ class _ChessBoardState extends State<ChessBoard> {
     return moves;
   }
 
+  // ---- THIS IS THE MAIN TAP HANDLER ----
   void _onTileTap(int row, int col) {
     setState(() {
+      String? tappedPiece = board[row][col];
+
+      // Enforce turn: only allow selecting current player's piece
+      if (tappedPiece != null &&
+          ((currentTurn == 'white' && tappedPiece[0] != 'w') ||
+              (currentTurn == 'black' && tappedPiece[0] != 'b'))) {
+        // Not this player's turn
+        return;
+      }
+
       // If no selection yet and there's a piece, select it and compute legal moves
       if (selectedRow == null) {
-        if (board[row][col] != null) {
+        if (tappedPiece != null) {
           selectedRow = row;
           selectedCol = col;
           legalMoves = _getLegalMoves(board[row][col]!, row, col);
@@ -177,6 +181,7 @@ class _ChessBoardState extends State<ChessBoard> {
 
       // If a piece is selected, check if tapped tile is one of legal moves
       bool tappedIsLegal = legalMoves.any((m) => m[0] == row && m[1] == col);
+
       if (tappedIsLegal && selectedRow != null && selectedCol != null) {
         final movedPiece = board[selectedRow!][selectedCol!];
         // record for undo
@@ -192,9 +197,12 @@ class _ChessBoardState extends State<ChessBoard> {
         // perform move
         board[row][col] = movedPiece;
         board[selectedRow!][selectedCol!] = null;
+
+        // ---- SWITCH TURN AFTER MOVE ----
+        currentTurn = currentTurn == 'white' ? 'black' : 'white';
       }
 
-      // Clear selection & legal moves whether move happened or not
+      // Clear selection & legal moves
       selectedRow = null;
       selectedCol = null;
       legalMoves = [];
@@ -214,7 +222,10 @@ class _ChessBoardState extends State<ChessBoard> {
 
       board[fromRow][fromCol] = piece;
       board[toRow][toCol] = captured;
-      // clear selection/possible moves
+
+      // After undo, switch turn back
+      currentTurn = currentTurn == 'white' ? 'black' : 'white';
+
       selectedRow = null;
       selectedCol = null;
       legalMoves = [];
@@ -229,13 +240,20 @@ class _ChessBoardState extends State<ChessBoard> {
 
   @override
   Widget build(BuildContext context) {
-    // Fixed board dimension (Option A)
     const double boardSize = 480.0;
     final double tileSize = boardSize / 8.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Show current turn
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(
+            "Current Turn: ${currentTurn[0].toUpperCase()}${currentTurn.substring(1)}",
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
         // Control buttons
         Padding(
           padding: const EdgeInsets.all(8.0),
